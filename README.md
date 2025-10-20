@@ -1,6 +1,6 @@
 # Flight Price Prediction Project
 
-This project performs EDA, preprocessing, model training (Linear Regression, Random Forest), evaluation, SHAP-based explanations, and a Streamlit demo app using your dataset `Clean_Dataset.csv`.
+This project performs EDA, preprocessing, model training (Linear Regression, Random Forest, XGboost), evaluation, SHAP-based explanations, and a Streamlit demo app using your dataset `Clean_Dataset.csv`.
 
 ## Project Structure
 - `data/` (created at runtime)
