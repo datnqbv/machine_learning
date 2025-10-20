@@ -4,12 +4,81 @@ import pandas as pd
 import streamlit as st
 from joblib import load
 
-st.set_page_config(page_title="Flight Price Predictor", layout="centered")
+st.set_page_config(page_title="Flight Price Predictor", layout="wide", page_icon="✈️")
 
-st.title("Flight Price Prediction")
-
+# Constants
 CSV_PATH = "Clean_Dataset.csv"
 MODELS_DIR = os.path.join("outputs", "models")
+METRICS_PATH = os.path.join("outputs", "metrics", "metrics.json")
+PLOTS_DIR = os.path.join("outputs", "plots")
+EDA_DIR = os.path.join("outputs", "eda")
+SHAP_DIR = os.path.join("outputs", "shap")
+
+# Small CSS tweaks for softer modern palette and better contrast
+st.markdown(
+    """
+    <style>
+    /* app background: soft indigo -> teal gradient */
+    .stApp { background: linear-gradient(135deg, #eef6ff 0%, #f2fbfb 100%); color: #0f1724; }
+
+    /* header */
+    h1 { color: #0f1724; font-weight: 800; }
+    .stMarkdown p { color: #334155; }
+
+    /* card-like panels */
+    .card { padding: 14px; border-radius: 12px; background: rgba(255,255,255,0.95); box-shadow: 0 6px 30px rgba(15,23,36,0.06); }
+    .big-metric { font-size: 28px; font-weight:700; color:#075985; }
+
+    /* tabs and accent color */
+    /* Tabs: make them rounded pills and remove default white boxes */
+    .stTabs [role="tab"] {
+        color: #0f1724;
+        background: transparent !important;
+        border-radius: 999px;
+        padding: 8px 18px;
+        margin-right: 6px;
+        border: 1px solid transparent;
+        transition: all 150ms ease-in-out;
+        box-shadow: none;
+    }
+    /* Container for tabs: subtle background to integrate tabs */
+    .stTabs>div:first-child { background: rgba(255,255,255,0.6); padding: 8px; border-radius: 12px; }
+    /* Active tab style */
+    .stTabs [role="tab"][aria-selected="true"] {
+        background: linear-gradient(90deg,#06b6d4 0%, #0ea5a4 100%) !important;
+        color: white !important;
+        border-color: rgba(10, 20, 30, 0.08) !important;
+        box-shadow: 0 6px 18px rgba(2,6,23,0.08);
+    }
+    /* Hover */
+    .stTabs [role="tab"]:hover { transform: translateY(-2px); }
+
+    /* small responsive tweaks */
+    .stButton>button { background-color: #0ea5a4; border: none; }
+    .stCaption { color: #475569; }
+
+    /* improve readability for images and captions */
+    .stImage img { border-radius: 8px; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# Optional model descriptions (used to show info in the app)
+MODEL_INFO = {
+    "linear": {
+        "name": "Linear Regression",
+        "desc": "Linear Regression: simple, interpretable baseline."
+    },
+    "rf": {
+        "name": "Random Forest",
+        "desc": "Random Forest: ensemble of decision trees, good for non-linear patterns."
+    },
+    "xgb": {
+        "name": "XGBoost",
+        "desc": "XGBoost: gradient boosting tree model, strong performance on tabular data."
+    }
+}
 
 @st.cache_data
 def load_df(csv_path: str) -> pd.DataFrame:
@@ -22,85 +91,137 @@ def list_models(models_dir: str):
     return [f for f in os.listdir(models_dir) if f.endswith("_pipeline.joblib")]
 
 @st.cache_data
-def load_metrics():
-    metrics_path = os.path.join("outputs", "metrics", "metrics.json")
-    if os.path.exists(metrics_path):
-        with open(metrics_path, "r", encoding="utf-8") as f:
+def load_metrics(path: str = METRICS_PATH):
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
     return {}
 
 
 def main():
+    # Load dataset
     if not os.path.exists(CSV_PATH):
-        st.warning("Upload your dataset 'Clean_Dataset.csv' to project root to populate choices.")
+        st.sidebar.warning("Upload 'Clean_Dataset.csv' to project root to enable helpful inputs.")
         df = pd.DataFrame()
     else:
         df = load_df(CSV_PATH)
 
+    # Sidebar: model selection
+    st.sidebar.header("Configuration")
     model_files = list_models(MODELS_DIR)
-    selected_model_file = st.selectbox("Select trained model", options=model_files)
-    
-    # Load and display metrics
+    selected_model_file = st.sidebar.selectbox("Trained model", options=[""] + model_files)
+
+    # Load metrics
     metrics = load_metrics()
-    if selected_model_file and metrics:
+
+    # Header area
+    st.markdown("<div style='display:flex;justify-content:space-between;align-items:center'>", unsafe_allow_html=True)
+    st.markdown("<div><h1>✈️ Flight Price Predictor</h1><p>Interactive demo — choose a model and enter flight details to predict price.</p></div>", unsafe_allow_html=True)
+    # show quick metrics for selected model
+    if selected_model_file:
         model_name = selected_model_file.replace("_pipeline.joblib", "")
         if model_name in metrics:
-            st.subheader("Model Performance")
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("R² Score", f"{metrics[model_name]['R2']:.3f}")
-            with col2:
-                st.metric("MAE", f"{metrics[model_name]['MAE']:,.0f}")
-            with col3:
-                st.metric("RMSE", f"{metrics[model_name]['RMSE']:,.0f}")
+            m = metrics[model_name]
+            st.markdown(f"<div class='card'><div class='big-metric'>R²: {m['R2']:.3f}</div><div>MAE: {m['MAE']:,.0f}</div><div>RMSE: {m['RMSE']:,.0f}</div></div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
-    with st.form("input_form"):
-        col1, col2 = st.columns(2)
-        if not df.empty:
-            airline = col1.selectbox("airline", sorted(df["airline"].dropna().unique())) if "airline" in df.columns else col1.text_input("airline")
-            source_city = col2.selectbox("source_city", sorted(df["source_city"].dropna().unique())) if "source_city" in df.columns else col2.text_input("source_city")
-            destination_city = col1.selectbox("destination_city", sorted(df["destination_city"].dropna().unique())) if "destination_city" in df.columns else col1.text_input("destination_city")
-            departure_time = col2.selectbox("departure_time", sorted(df["departure_time"].dropna().unique())) if "departure_time" in df.columns else col2.text_input("departure_time")
-            arrival_time = col1.selectbox("arrival_time", sorted(df["arrival_time"].dropna().unique())) if "arrival_time" in df.columns else col1.text_input("arrival_time")
-            stops = col2.selectbox("stops", sorted(df["stops"].dropna().unique())) if "stops" in df.columns else col2.text_input("stops")
-            seat_class = col1.selectbox("class", sorted(df["class"].dropna().unique())) if "class" in df.columns else col1.text_input("class")
+    # Main tabs
+    tab_predict, tab_eda, tab_models = st.tabs(["Predict", "EDA", "Models"])
+
+    # In tab content we will show details below
+
+    # Predict tab
+    with tab_predict:
+        st.markdown("### Predict a single flight")
+        with st.form("input_form"):
+            row1, row2 = st.columns(2)
+            if not df.empty:
+                airline = row1.selectbox("Airline", sorted(df["airline"].dropna().unique())) if "airline" in df.columns else row1.text_input("Airline")
+                source_city = row2.selectbox("Source", sorted(df["source_city"].dropna().unique())) if "source_city" in df.columns else row2.text_input("Source")
+                destination_city = row1.selectbox("Destination", sorted(df["destination_city"].dropna().unique())) if "destination_city" in df.columns else row1.text_input("Destination")
+                departure_time = row2.selectbox("Departure time", sorted(df["departure_time"].dropna().unique())) if "departure_time" in df.columns else row2.text_input("Departure time")
+                arrival_time = row1.selectbox("Arrival time", sorted(df["arrival_time"].dropna().unique())) if "arrival_time" in df.columns else row1.text_input("Arrival time")
+                stops = row2.selectbox("Stops", sorted(df["stops"].dropna().unique())) if "stops" in df.columns else row2.text_input("Stops")
+                seat_class = row1.selectbox("Class", sorted(df["class"].dropna().unique())) if "class" in df.columns else row1.text_input("Class")
+            else:
+                airline = row1.text_input("Airline")
+                source_city = row2.text_input("Source")
+                destination_city = row1.text_input("Destination")
+                departure_time = row2.text_input("Departure time")
+                arrival_time = row1.text_input("Arrival time")
+                stops = row2.text_input("Stops")
+                seat_class = row1.text_input("Class")
+
+            duration = row2.number_input("Duration (hours)", min_value=0.0, value=2.0, step=0.1)
+            days_left = row1.number_input("Days left", min_value=0, value=30)
+
+            submitted = st.form_submit_button("Predict")
+
+        if submitted:
+            if not selected_model_file:
+                st.error("Please train models first and select one in the sidebar.")
+            else:
+                model_path = os.path.join(MODELS_DIR, selected_model_file)
+                pipe = load(model_path)
+                sample = pd.DataFrame([{"airline": airline,
+                                        "source_city": source_city,
+                                        "destination_city": destination_city,
+                                        "departure_time": departure_time,
+                                        "arrival_time": arrival_time,
+                                        "stops": stops,
+                                        "class": seat_class,
+                                        "duration": duration,
+                                        "days_left": days_left}])
+                pred = pipe.predict(sample)[0]
+                st.success(f"Predicted price: {pred:,.0f}")
+                st.caption("Tip: Make sure categorical values exist in training data to avoid distribution shift.")
+
+    # EDA tab
+    with tab_eda:
+        st.markdown("### Exploratory Data Analysis")
+        if df.empty:
+            st.info("No dataset found. Place Clean_Dataset.csv in project root.")
         else:
-            airline = col1.text_input("airline")
-            source_city = col2.text_input("source_city")
-            destination_city = col1.text_input("destination_city")
-            departure_time = col2.text_input("departure_time")
-            arrival_time = col1.text_input("arrival_time")
-            stops = col2.text_input("stops")
-            seat_class = col1.text_input("class")
+            c1, c2 = st.columns(2)
+            hist_p = os.path.join(EDA_DIR, "price_histogram.png")
+            days_p = os.path.join(EDA_DIR, "price_vs_days_left.png")
+            if os.path.exists(hist_p):
+                c1.image(hist_p, caption="Price distribution")
+            if os.path.exists(days_p):
+                c2.image(days_p, caption="Price vs days_left")
 
-        duration = col2.number_input("duration (minutes)", min_value=0.0, value=120.0)
-        days_left = col1.number_input("days_left", min_value=0, value=30)
+            st.markdown("#### Category boxplots")
+            col1, col2, col3 = st.columns(3)
+            a_p = os.path.join(EDA_DIR, "price_by_airline.png")
+            s_p = os.path.join(EDA_DIR, "price_by_stops.png")
+            cl_p = os.path.join(EDA_DIR, "price_by_class.png")
+            if os.path.exists(a_p):
+                col1.image(a_p)
+            if os.path.exists(s_p):
+                col2.image(s_p)
+            if os.path.exists(cl_p):
+                col3.image(cl_p)
 
-        submitted = st.form_submit_button("Predict Price")
-
-    if submitted:
+    # Models tab
+    with tab_models:
+        st.markdown("### Models & Explanations")
         if not selected_model_file:
-            st.error("Please train models first (run training script) and select one.")
-            return
-        model_path = os.path.join(MODELS_DIR, selected_model_file)
-        pipe = load(model_path)
-        sample = pd.DataFrame([
-            {
-                "airline": airline,
-                "source_city": source_city,
-                "destination_city": destination_city,
-                "departure_time": departure_time,
-                "arrival_time": arrival_time,
-                "stops": stops,
-                "class": seat_class,
-                "duration": duration,
-                "days_left": days_left,
-            }
-        ])
-        pred = pipe.predict(sample)[0]
-        st.success(f"Predicted price: {pred:,.0f}")
+            st.info("Select a trained model from the sidebar to view details.")
+        else:
+            model_name = selected_model_file.replace("_pipeline.joblib", "")
+            st.markdown(f"#### {model_name.upper()}")
+            if model_name in MODEL_INFO:
+                st.markdown(MODEL_INFO[model_name]['desc'])
 
-        st.caption("Tip: Ensure input categories exist in training data to avoid distribution shift.")
+            # show plots if exist
+            fi = os.path.join(PLOTS_DIR, f"feature_importance_{model_name}.png")
+            sp = os.path.join(SHAP_DIR, f"{model_name}_shap_summary.png")
+            if os.path.exists(fi):
+                st.markdown("**Feature importance**")
+                st.image(fi)
+            if os.path.exists(sp):
+                st.markdown("**SHAP summary**")
+                st.image(sp)
 
 
 if __name__ == "__main__":

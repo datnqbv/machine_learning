@@ -10,6 +10,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
+from xgboost import XGBRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from joblib import dump
 
@@ -36,6 +37,14 @@ def get_models() -> Dict[str, Any]:
             min_samples_leaf=2,
             n_jobs=-1,
             random_state=RANDOM_STATE,
+        ),
+        "xgb": XGBRegressor(
+            n_estimators=300,
+            max_depth=8,
+            learning_rate=0.05,
+            objective='reg:squarederror',
+            random_state=RANDOM_STATE,
+            n_jobs=-1,
         ),
     }
     return models
@@ -144,13 +153,19 @@ def main():
             out_path=os.path.join(paths["plots"], f"pred_vs_actual_{name}.png")
         )
 
-        # Feature importance for Random Forest only
-        if name == "rf":
-            X_train_transformed = pipe.named_steps["pre"].fit_transform(X_train, y_train)
-            feature_names = get_feature_names(pipe.named_steps["pre"], categorical_cols, numerical_cols)
+        # Feature importance and SHAP for tree-based models (RandomForest, XGBoost, etc.)
+        tree_estimator = pipe.named_steps["model"]
+        try:
+            # transform (do not refit) to get training matrix used for shap
+            X_train_transformed = pipe.named_steps["pre"].transform(X_train)
+        except Exception:
+            # fallback
+            X_train_transformed = pipe.named_steps["pre"].fit_transform(X_train)
 
-            tree_estimator = pipe.named_steps["model"]
-            if hasattr(tree_estimator, "feature_importances_"):
+        feature_names = get_feature_names(pipe.named_steps["pre"], categorical_cols, numerical_cols)
+
+        if hasattr(tree_estimator, "feature_importances_"):
+            try:
                 importances = tree_estimator.feature_importances_
                 plot_feature_importance(
                     importances=np.array(importances),
@@ -158,17 +173,19 @@ def main():
                     title=f"Feature Importance - {name}",
                     out_path=os.path.join(paths["plots"], f"feature_importance_{name}.png")
                 )
-
-            # SHAP
-            try:
-                compute_and_save_shap(
-                    tree_model=tree_estimator,
-                    X_transformed=X_train_transformed,
-                    feature_names=feature_names,
-                    out_path_prefix=os.path.join(paths["shap"], f"{name}")
-                )
             except Exception:
                 pass
+
+        # SHAP (only for tree-based models where TreeExplainer applies)
+        try:
+            compute_and_save_shap(
+                tree_model=tree_estimator,
+                X_transformed=X_train_transformed,
+                feature_names=feature_names,
+                out_path_prefix=os.path.join(paths["shap"], f"{name}")
+            )
+        except Exception:
+            pass
 
     # Save metrics
     with open(os.path.join(paths["metrics"], "metrics.json"), "w", encoding="utf-8") as f:
