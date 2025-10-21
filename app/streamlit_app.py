@@ -130,9 +130,17 @@ def main():
 
     # In tab content we will show details below
 
+
     # Predict tab
     with tab_predict:
-        st.markdown("### Predict a single flight")
+        st.markdown("### Flight Price Prediction")
+        st.info("Enter flight details to predict the price. If no model is available, please train one first using the sidebar or the Models tab.")
+        st.markdown("""
+        **Instructions:**
+        - Select airline, source city, destination city, departure/arrival time, number of stops, class, duration, and days left.
+        - If no data is available, you can try entering the sample values below.
+        """)
+        st.markdown("**Example:** Airline: VietJet, Source: Hanoi, Destination: Ho Chi Minh City, Departure: Morning, Arrival: Afternoon, Stops: 0, Class: Economy, Duration: 2.0, Days left: 30")
         with st.form("input_form"):
             row1, row2 = st.columns(2)
             if not df.empty:
@@ -159,7 +167,7 @@ def main():
 
         if submitted:
             if not selected_model_file:
-                st.error("Please train models first and select one in the sidebar.")
+                st.error("You need to train and select a model before making predictions.")
             else:
                 model_path = os.path.join(MODELS_DIR, selected_model_file)
                 pipe = load(model_path)
@@ -173,14 +181,23 @@ def main():
                                         "duration": duration,
                                         "days_left": days_left}])
                 pred = pipe.predict(sample)[0]
-                st.success(f"Predicted price: {pred:,.0f}")
-                st.caption("Tip: Make sure categorical values exist in training data to avoid distribution shift.")
+                st.success(f"Predicted price: {pred:,.0f} RUB")
+                st.caption("Note: For best results, use values similar to those in the training data.")
 
     # EDA tab
     with tab_eda:
-        st.markdown("### Exploratory Data Analysis")
+        st.markdown("### Exploratory Data Analysis (EDA)")
+        st.info("Explore the dataset, view price distributions, and relationships between features.")
+        st.markdown("""
+        **Chart explanations:**
+        - Price distribution helps detect outliers and overall trends.
+        - Boxplots by airline, stops, and class allow group comparisons.
+        - Scatter plot of price vs days left shows the effect of booking time.
+        """)
         if df.empty:
-            st.info("No dataset found. Place Clean_Dataset.csv in project root.")
+            st.warning("No data available. You can view sample images below or upload your dataset.")
+            st.image("https://i.imgur.com/1Q9Z1ZB.png", caption="Sample price distribution")
+            st.image("https://i.imgur.com/2Q9Z1ZB.png", caption="Sample boxplot by airline")
         else:
             c1, c2 = st.columns(2)
             hist_p = os.path.join(EDA_DIR, "price_histogram.png")
@@ -188,25 +205,39 @@ def main():
             if os.path.exists(hist_p):
                 c1.image(hist_p, caption="Price distribution")
             if os.path.exists(days_p):
-                c2.image(days_p, caption="Price vs days_left")
+                c2.image(days_p, caption="Price vs days left")
 
-            st.markdown("#### Category boxplots")
+            st.markdown("#### Boxplots by group")
             col1, col2, col3 = st.columns(3)
             a_p = os.path.join(EDA_DIR, "price_by_airline.png")
             s_p = os.path.join(EDA_DIR, "price_by_stops.png")
             cl_p = os.path.join(EDA_DIR, "price_by_class.png")
             if os.path.exists(a_p):
-                col1.image(a_p)
+                col1.image(a_p, caption="By airline")
             if os.path.exists(s_p):
-                col2.image(s_p)
+                col2.image(s_p, caption="By number of stops")
             if os.path.exists(cl_p):
-                col3.image(cl_p)
+                col3.image(cl_p, caption="By class")
 
     # Models tab
     with tab_models:
         st.markdown("### Models & Explanations")
+        st.info("View details of trained models, evaluation metrics, and SHAP explanations. If no model is available, please train one using the Predict tab or sidebar.")
+        st.markdown("""
+        **Models used:**
+        - Linear Regression: simple, interpretable.
+        - Random Forest: ensemble of decision trees, good for non-linear data.
+        - XGBoost: powerful boosting, high performance for tabular data.
+
+        **Evaluation metrics:**
+        - MAE: Mean Absolute Error
+        - RMSE: Root Mean Squared Error
+        - R²: Model fit (coefficient of determination)
+        """)
         if not selected_model_file:
-            st.info("Select a trained model from the sidebar to view details.")
+            st.warning("No model selected. You can view sample images below or train a model.")
+            st.image("https://i.imgur.com/3Q9Z1ZB.png", caption="Sample feature importance")
+            st.image("https://i.imgur.com/4Q9Z1ZB.png", caption="Sample SHAP summary")
         else:
             model_name = selected_model_file.replace("_pipeline.joblib", "")
             st.markdown(f"#### {model_name.upper()}")
