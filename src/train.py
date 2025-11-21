@@ -17,26 +17,26 @@ from joblib import dump
 import shap
 
 from .utils import (
-    load_dataset,
-    ensure_output_dirs,
-    build_preprocessor,
-    split_features_target,
-    validate_columns,
+    load_dataset,         # Đọc và làm sạch dữ liệu từ file CSV
+    ensure_output_dirs,   # Tạo các thư mục outputs cần thiết để lưu kết quả
+    build_preprocessor,   # Xây dựng pipeline tiền xử lý dữ liệu (chuẩn hóa, one-hot)
+    split_features_target,# Tách dữ liệu thành features (X) và target (y)
+    validate_columns,     # Xác định các cột phân loại và cột số thực sự có trong dữ liệu
 )
 
 
 RANDOM_STATE = 42
-
+ #Hàm  khởi tạo và trả về ba mô hình dự báo giá
 def get_models() -> Dict[str, Any]:
     models: Dict[str, Any] = {
         "linear": LinearRegression(),
         "rf": RandomForestRegressor(
-            n_estimators=400,
-            max_features="sqrt",
-            max_depth=12,
-            min_samples_leaf=2,
-            n_jobs=-1,
-            random_state=RANDOM_STATE,
+            n_estimators=400,         #Số lượng cây quyết định trong rừng (400 cây).
+            max_features="sqrt",      #Số lượng đặc trưng được xem xét khi chia mỗi node là căn bậc hai số đặc trưng.
+            max_depth=12,             #Độ sâu tối đa của mỗi cây là 12.
+            min_samples_leaf=2,       #Mỗi lá phải có ít nhất 2 mẫu.
+            n_jobs=-1,                # Sử dụng tất cả các CPU để huấn luyện song song.
+            random_state=RANDOM_STATE, # Đảm bảo kết quả có thể lặp lại (tái tạo được).
         ),
         "xgb": XGBRegressor(
             n_estimators=300,
@@ -50,13 +50,14 @@ def get_models() -> Dict[str, Any]:
     return models
 
 
+# Hàm trả về MAE (sai số tuyệt đối trung bình), RMSE (căn bậc hai sai số bình phương trung bình), và R2 (hệ số xác định).
 def evaluate_and_log(y_true: np.ndarray, y_pred: np.ndarray) -> Dict[str, float]:
     mae = mean_absolute_error(y_true, y_pred)
     rmse = mean_squared_error(y_true, y_pred, squared=False)
     r2 = r2_score(y_true, y_pred)
     return {"MAE": float(mae), "RMSE": float(rmse), "R2": float(r2)}
 
-
+# Hàm vẽ và lưu biểu đồ so sánh giữa giá thực tế và giá dự đoán
 def plot_pred_vs_actual(y_true: np.ndarray, y_pred: np.ndarray, title: str, out_path: str) -> None:
     plt.figure(figsize=(6,6))
     max_val = max(np.max(y_true), np.max(y_pred))
@@ -70,7 +71,7 @@ def plot_pred_vs_actual(y_true: np.ndarray, y_pred: np.ndarray, title: str, out_
     plt.savefig(out_path)
     plt.close()
 
-
+ # Hàm lấy danh sách tên các đặc trưng (feature names) sau khi đã tiền xử lý (one-hot, chuẩn hóa...), để sử dụng cho việc trực quan hóa hoặc giải thích mô hình
 def get_feature_names(preprocessor, categorical_cols, numerical_cols):
     # Works with sklearn >= 1.0 when verbose_feature_names_out=False
     try:
@@ -84,7 +85,7 @@ def get_feature_names(preprocessor, categorical_cols, numerical_cols):
             cat_names = []
         return cat_names + numerical_cols
 
-
+# Hàm vẽ và lưu biểu đồ cột thể hiện tầm quan trọng của các đặc trưng (feature importance) trong mô hình
 def plot_feature_importance(importances: np.ndarray, feature_names: list, title: str, out_path: str, top_k: int = 25):
     idx = np.argsort(importances)[::-1][:top_k]
     plt.figure(figsize=(8, max(4, int(0.3 * len(idx)))))
@@ -96,7 +97,7 @@ def plot_feature_importance(importances: np.ndarray, feature_names: list, title:
     plt.savefig(out_path)
     plt.close()
 
-
+ # Hàm tính toán giá trị SHAP để giải thích mô hình cây, vẽ và lưu biểu đồ SHAP summary plot
 def compute_and_save_shap(tree_model, X_transformed: np.ndarray, feature_names: list, out_path_prefix: str):
     explainer = shap.TreeExplainer(tree_model)
     # Sample to speed up
@@ -107,67 +108,68 @@ def compute_and_save_shap(tree_model, X_transformed: np.ndarray, feature_names: 
     plt.figure(figsize=(10,6))
     shap.summary_plot(shap_values, X_sample, feature_names=feature_names, show=False)
     plt.tight_layout()
-    plt.savefig(out_path_prefix + "_shap_summary.png")
+    plt.savefig(out_path_prefix + "_shap_summary.png") 
     plt.close()
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--csv", type=str, required=True)
-    args = parser.parse_args()
+    parser.add_argument("--csv", type=str, required=True) # Đường dẫn tới file CSV chứa dữ liệu huấn luyện
+    args = parser.parse_args() # Lấy đối số dòng lệnh
 
-    paths = ensure_output_dirs()
-
-    df = load_dataset(args.csv)
+    paths = ensure_output_dirs() # Tạo các thư mục outputs cần thiết để lưu kết quả
+    
+    df = load_dataset(args.csv) # Đọc và làm sạch dữ liệu từ file CSV
     X, y = split_features_target(df)
-    categorical_cols, numerical_cols = validate_columns(df)
-    preprocessor = build_preprocessor(categorical_cols, numerical_cols)
-
+    categorical_cols, numerical_cols = validate_columns(df) #Xác định các cột phân loại và cột số thực sự có trong dữ liệu
+    preprocessor = build_preprocessor(categorical_cols, numerical_cols) #Xây dựng pipeline tiền xử lý dữ liệu (chuẩn hóa, one-hot)
+    # Chia dữ liệu thành tập huấn luyện và tập kiểm tra
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=RANDOM_STATE)
 
     models = get_models()
 
-    all_metrics: Dict[str, Dict[str, float]] = {}
-
+    all_metrics: Dict[str, Dict[str, float]] = {} # Lưu trữ các chỉ số đánh giá cho từng mô hình
+    
+    # Huấn luyện, đánh giá, lưu mô hình và tạo các biểu đồ cho từng mô hình
     for name, model in models.items():
         pipe = Pipeline(steps=[
             ("pre", preprocessor),
             ("model", model)
         ])
 
-        pipe.fit(X_train, y_train)
-        y_pred = pipe.predict(X_test)
+        pipe.fit(X_train, y_train) # Huấn luyện mô hình
+        y_pred = pipe.predict(X_test) # Dự đoán trên tập kiểm tra
 
-        metrics = evaluate_and_log(y_test, y_pred)
-        all_metrics[name] = metrics
+        metrics = evaluate_and_log(y_test, y_pred) # Tính toán các chỉ số đánh giá
+        all_metrics[name] = metrics # Lưu chỉ số đánh giá cho mô hình hiện tại
 
         # Save model
         model_path = os.path.join(paths["models"], f"{name}_pipeline.joblib")
         dump(pipe, model_path)
 
-        # Pred vs Actual plot
-        plot_pred_vs_actual(
+        # Vẽ và lưu biểu đồ so sánh giữa giá thực tế và giá dự đoán
+        plot_pred_vs_actual( 
             y_test.values if hasattr(y_test, "values") else y_test,
             y_pred,
             title=f"Predicted vs Actual - {name}",
             out_path=os.path.join(paths["plots"], f"pred_vs_actual_{name}.png")
         )
 
-        # Feature importance and SHAP for tree-based models (RandomForest, XGBoost, etc.)
+        # Feature importance and SHAP
         tree_estimator = pipe.named_steps["model"]
         try:
             # transform (do not refit) to get training matrix used for shap
-            X_train_transformed = pipe.named_steps["pre"].transform(X_train)
+            X_train_transformed = pipe.named_steps["pre"].transform(X_train) # Chuyển đổi tập huấn luyện mà không cần huấn luyện lại bộ tiền xử lý
         except Exception:
             # fallback
             X_train_transformed = pipe.named_steps["pre"].fit_transform(X_train)
 
         feature_names = get_feature_names(pipe.named_steps["pre"], categorical_cols, numerical_cols)
-
+        # Feature importance plot
         if hasattr(tree_estimator, "feature_importances_"):
             try:
-                importances = tree_estimator.feature_importances_
-                plot_feature_importance(
+                importances = tree_estimator.feature_importances_ # Lấy tầm quan trọng của các đặc trưng từ mô hình cây
+                plot_feature_importance( 
                     importances=np.array(importances),
                     feature_names=feature_names,
                     title=f"Feature Importance - {name}",

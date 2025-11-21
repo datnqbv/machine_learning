@@ -5,18 +5,18 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from .utils import load_dataset, ensure_output_dirs, TARGET_COLUMN, CATEGORICAL_COLUMNS
 
-
+# Hàm vẽ và lưu biểu đồ phân phối giá
 def plot_price_histogram(df: pd.DataFrame, out_dir: str) -> None:
     plt.figure(figsize=(8, 5))
     sns.histplot(df[TARGET_COLUMN], bins=50, kde=True)
     plt.title("Price Distribution")
-    plt.xlabel("Price")
+    plt.xlabel("Price") 
     plt.ylabel("Count")
     plt.tight_layout()
     plt.savefig(os.path.join(out_dir, "price_histogram.png"))
     plt.close()
 
-
+# Hàm vẽ và lưu biểu đồ hộp giá theo từng danh mục
 def plot_box_by_category(df: pd.DataFrame, col: str, out_dir: str) -> None:
     if col not in df.columns:
         return
@@ -30,7 +30,7 @@ def plot_box_by_category(df: pd.DataFrame, col: str, out_dir: str) -> None:
     plt.savefig(os.path.join(out_dir, f"price_by_{col}.png"))
     plt.close()
 
-
+# Hàm vẽ và lưu biểu đồ thể hiện mối quan hệ giữa days_left và giá
 def plot_days_left_relationship(df: pd.DataFrame, out_dir: str) -> None:
     if "days_left" not in df.columns:
         return
@@ -46,20 +46,20 @@ def plot_days_left_relationship(df: pd.DataFrame, out_dir: str) -> None:
 
 
 def main():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser() # Định nghĩa đối số dòng lệnh
     parser.add_argument("--csv", type=str, required=True, help="Path to Clean_Dataset.csv")
-    args = parser.parse_args()
+    args = parser.parse_args() # Lấy đối số dòng lệnh
 
-    paths = ensure_output_dirs()
-    eda_dir = paths["eda"]
+    paths = ensure_output_dirs() # Tạo các thư mục outputs cần thiết để lưu kết quả
+    eda_dir = paths["eda"] # Thư mục để lưu kết quả EDA
 
-    df = load_dataset(args.csv)
+    df = load_dataset(args.csv) # Đọc và làm sạch dữ liệu từ file CSV
 
     # Histogram of price
     plot_price_histogram(df, eda_dir)
 
     # Price by airline, stops, class
-    for cat in ["airline", "stops", "class"]:
+    for cat in ["airline", "stops", "class"]: # Cột phân loại để vẽ biểu đồ hộp
         plot_box_by_category(df, cat, eda_dir)
 
     # Relationship with days_left
